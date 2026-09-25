@@ -1,0 +1,3 @@
+# Candidate exports contain personal data; only fake fixtures are committed
+*.csv
+!fixtures/**/*.csv
