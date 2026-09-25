@@ -12,7 +12,9 @@
     "db:test": "supabase test db",
     "functions:serve": "supabase functions serve",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "create-admin": "node scripts/create-admin.ts",
+    "seed:dev": "node scripts/seed-dev.ts"
   },
   "devDependencies": {
     "supabase": "^2.118.0",
