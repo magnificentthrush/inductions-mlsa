@@ -1,0 +1,26 @@
+{
+  "name": "mlsa-induction",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "db:start": "supabase start -x studio,postgres-meta,imgproxy,storage-api,logflare,vector,mailpit,supavisor",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "functions:serve": "supabase functions serve",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "create-admin": "node scripts/create-admin.ts",
+    "seed:dev": "node scripts/seed-dev.ts"
+  },
+  "devDependencies": {
+    "supabase": "^2.118.0",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2"
+  }
+}
