@@ -1,3 +1,9 @@
 # Candidate exports contain personal data; only fake fixtures are committed
 *.csv
 !fixtures/**/*.csv
+node_modules/
+supabase/.temp/
+supabase/.branches/
+.env
+.env.*
+!.env.example
