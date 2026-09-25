@@ -41,6 +41,8 @@ select ok((select deleted_at is not null from public.panels where name = 'Panel 
 select is((select count(*)::int from public.interviews where status = 'ended'), 1, 'its past interview is kept');
 select is((select current_panel_id from public.profiles where username = 'pan_one'), null::uuid, 'panelists on it are cleared');
 select is(jsonb_array_length(public.board_snapshot() -> 'panels'), 2, 'the board hides the deleted panel');
+select throws_ok($$ select public.reopen_interview(tests.interview_id(4)) $$, 'P0001', 'Panel not found',
+                 'an interview on a deleted panel cannot be reopened');
 
 select public.add_panel();
 select is((select count(*)::int from public.panels where name = 'Panel 4'), 1, 'numbering continues after a deleted panel');

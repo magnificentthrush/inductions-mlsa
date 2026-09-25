@@ -81,5 +81,13 @@ select is((select count(*)::int from public.candidates), 7, 'the missing-reg row
 select public.import_candidates(jsonb_build_array(tests.import_row('2023100', 'Zara O''Brien — زارا', '2026-09-20T13:00:00+05:00')));
 select is((select full_name from public.candidates where reg_number = '2023100'), 'Zara O''Brien — زارا', 'special characters kept');
 
+-- New registrations in the same file that share an email are flagged too (e.g. the first import)
+select is(
+  public.import_candidates(jsonb_build_array(
+    tests.import_row('2023200', 'Hina', '2026-09-20T14:00:00+05:00', 'hina@example.test'),
+    tests.import_row('2032200', 'Hina R', '2026-09-20T14:05:00+05:00', 'HINA@example.test'))) -> 'flagged',
+  '[{"reg_number": "2032200", "name": "Hina R", "reason": "Possible reg number typo; email matches #9"}]'::jsonb,
+  'two new registrations sharing an email are flagged');
+
 select * from finish();
 rollback;

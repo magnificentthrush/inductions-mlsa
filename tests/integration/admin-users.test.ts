@@ -88,6 +88,14 @@ describe('admin-users edge function', () => {
     expect(res).toEqual({ status: 400, body: { error: 'You cannot disable your own account' } });
   });
 
+  it('issues access tokens that expire within 10 minutes, so a disabled account soon loses live updates', async () => {
+    const username = uniqueName('it_ttl');
+    created.push(await makeAccount(username, 'panelist'));
+    const token = await accessToken(await signIn(username));
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+    expect(claims.exp - claims.iat).toBeLessThanOrEqual(600);
+  });
+
   it('resets a password', async () => {
     const username = uniqueName('it_pw');
     const userId = await makeAccount(username, 'panelist');
