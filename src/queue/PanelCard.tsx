@@ -1,0 +1,95 @@
+import { ActionButton } from '../components/ActionButton.tsx';
+import { Timer } from '../components/Timer.tsx';
+import { useApi } from '../lib/ApiProvider.tsx';
+import type { BoardPanel, Role } from '../lib/types.ts';
+import { CandidateName, MoveButtons, SkipBadge } from './bits.tsx';
+import { canDeletePanel } from './queueView.ts';
+
+interface PanelCardProps {
+  panel: BoardPanel;
+  targetMinutes: number;
+  role: Role;
+}
+
+export function PanelCard({ panel, targetMinutes, role }: PanelCardProps) {
+  const api = useApi();
+  const { current, last_ended: lastEnded } = panel;
+
+  return (
+    <section aria-label={panel.name} className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <h2 className="text-base font-semibold">{panel.name}</h2>
+        {current ? (
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">Busy</span>
+        ) : (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Free</span>
+        )}
+        {canDeletePanel(panel, role) && (
+          <ActionButton
+            variant="ghost"
+            className="ml-auto"
+            confirm={`Delete ${panel.name}? Anyone lined up for it moves to the end of the pool.`}
+            action={() => api.deletePanel(panel.id)}
+          >
+            Delete panel
+          </ActionButton>
+        )}
+      </header>
+
+      <div className="flex flex-1 flex-col gap-3 px-4 py-3">
+        {current ? (
+          <div className="rounded-lg bg-sky-50 p-3">
+            <p className="text-xs font-semibold tracking-wide text-sky-700 uppercase">Now interviewing</p>
+            <p className="mt-1 flex items-baseline justify-between gap-3">
+              <CandidateName number={current.number} name={current.name} className="text-lg font-semibold" />
+              <Timer startedAt={current.started_at} targetMinutes={targetMinutes} className="text-lg font-semibold" />
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <ActionButton variant="primary" action={() => api.endInterview(current.interview_id)}>End interview</ActionButton>
+              <ActionButton action={() => api.undoSendIn(current.interview_id)}>Undo send-in</ActionButton>
+            </div>
+          </div>
+        ) : lastEnded ? (
+          <p className="flex flex-wrap items-center gap-1 text-sm text-slate-600">
+            Last: <CandidateName number={lastEnded.number} name={lastEnded.name} /> —
+            <ActionButton variant="ghost" label={`Reopen the interview with #${lastEnded.number}`} action={() => api.reopenInterview(lastEnded.interview_id)}>
+              Reopen
+            </ActionButton>
+          </p>
+        ) : null}
+
+        <p className="text-sm text-slate-600">
+          {panel.panelists.length > 0 ? `Present: ${panel.panelists.map((p) => p.display_name).join(', ')}` : 'No panelists present'}
+        </p>
+
+        {panel.lane.length === 0 ? (
+          <p className="text-sm text-slate-500">Nobody lined up.</p>
+        ) : (
+          <ol aria-label={`Lined up for ${panel.name}`} className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {panel.lane.map((entry) => (
+              <li key={entry.candidate_id} className="space-y-2 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 text-sm text-slate-500 tabular-nums">{entry.position}.</span>
+                  <CandidateName number={entry.number} name={entry.name} className="flex-1 font-medium" />
+                  <SkipBadge count={entry.skip_count} />
+                </div>
+                <div className="flex flex-wrap gap-1 pl-7">
+                  {entry.position === 1 && !current && (
+                    <ActionButton variant="primary" label={`Send #${entry.number} in to ${panel.name}`} action={() => api.sendIn(entry.candidate_id, panel.id)}>
+                      Send in
+                    </ActionButton>
+                  )}
+                  <MoveButtons entry={entry} laneId={panel.id} laneLength={panel.lane.length} />
+                  <ActionButton label={`Skip #${entry.number}`} action={() => api.skipCandidate(entry.candidate_id)}>Skip</ActionButton>
+                  <ActionButton label={`Move #${entry.number} back to the pool`} action={() => api.moveCandidate(entry.candidate_id, null, 1)}>
+                    Back to pool
+                  </ActionButton>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+}

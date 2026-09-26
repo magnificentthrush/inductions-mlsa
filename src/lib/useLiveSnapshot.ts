@@ -1,0 +1,95 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { errorMessage } from './api.ts';
+import type { Subscribe } from './realtime.ts';
+
+export type LiveStatus = 'connecting' | 'live' | 'reconnecting';
+
+export interface LiveSnapshot<T> {
+  /** undefined until the first successful load; then always the latest good snapshot. */
+  data: T | undefined;
+  /** The last load's error, cleared by the next successful load. */
+  error: string | null;
+  status: LiveStatus;
+  reload: () => void;
+}
+
+/**
+ * Loads a snapshot and reloads it when the realtime channel (re)subscribes, when it delivers an
+ * event, and every `pollMs` if given. Loads never overlap: events that arrive during a load cause
+ * exactly one more load afterwards. A channel that hasn't joined after `connectTimeoutMs` is
+ * reported as reconnecting, so a stuck subscription never looks healthy. `load` and `subscribe`
+ * must be stable (useCallback/useMemo).
+ */
+export function useLiveSnapshot<T>(
+  load: () => Promise<T>,
+  subscribe: Subscribe,
+  pollMs?: number,
+  connectTimeoutMs = 15_000,
+): LiveSnapshot<T> {
+  const [data, setData] = useState<T>();
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<LiveStatus>('connecting');
+  // `generation` changes whenever the subscription restarts, so late answers for an old one are dropped.
+  const loop = useRef({ generation: 0, running: false, again: false });
+
+  const reload = useCallback(() => {
+    const state = loop.current;
+    if (state.running) {
+      state.again = true;
+      return;
+    }
+    state.running = true;
+    void (async () => {
+      try {
+        do {
+          state.again = false;
+          const generation = state.generation;
+          try {
+            const next = await load();
+            if (generation === state.generation) {
+              setData(next);
+              setError(null);
+            }
+          } catch (e) {
+            if (generation === state.generation) setError(errorMessage(e));
+          }
+        } while (state.again);
+      } finally {
+        state.running = false;
+      }
+    })();
+  }, [load]);
+
+  useEffect(() => {
+    const state = loop.current;
+    const generation = ++state.generation;
+    let joined = false;
+    setStatus('connecting');
+    reload();
+    const stop = subscribe({
+      onEvent: reload,
+      onStatus: (channelStatus) => {
+        if (generation !== state.generation) return;
+        if (channelStatus === 'subscribed') {
+          joined = true;
+          setStatus('live');
+          reload(); // anything broadcast while we were (re)connecting was missed
+        } else {
+          setStatus('reconnecting');
+        }
+      },
+    });
+    const timer = pollMs ? setInterval(reload, pollMs) : undefined;
+    const stuck = setTimeout(() => {
+      if (!joined && generation === state.generation) setStatus('reconnecting');
+    }, connectTimeoutMs);
+    return () => {
+      state.generation++;
+      stop();
+      if (timer) clearInterval(timer);
+      clearTimeout(stuck);
+    };
+  }, [subscribe, pollMs, connectTimeoutMs, reload]);
+
+  return { data, error, status, reload };
+}
