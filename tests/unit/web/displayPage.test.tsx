@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../src/lib/api.ts';
 import { display } from './fixtures.ts';
@@ -55,7 +55,7 @@ describe('DisplayPage', () => {
     act(() => api.topics.display.event());
     const panel2 = screen.getByRole('region', { name: 'Panel 2' });
     expect(await within(panel2).findByText('Now interviewing')).toBeInTheDocument();
-    expect(panel2).toHaveAttribute('data-flash', 'true');
+    await waitFor(() => expect(panel2).toHaveAttribute('data-flash', 'true')); // set by an effect one render later
     expect(screen.getByRole('region', { name: 'Panel 1' })).not.toHaveAttribute('data-flash');
   });
 

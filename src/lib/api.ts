@@ -4,6 +4,7 @@ import { broadcastSubscriber, type Subscribe } from './realtime.ts';
 import type { BoardSnapshot, CandidateSummary, DisplaySnapshot, ImportResult, ImportRow } from './types.ts';
 
 export const NETWORK_ERROR = "Can't reach the server. Check the connection and try again.";
+export const TIMEOUT_ERROR = 'The server took too long to answer. Check the board before trying again.';
 export const NOT_ALLOWED = 'Not allowed';
 
 /** An action or read failed; `message` is safe to show (usually the database's own short message). */
@@ -46,42 +47,55 @@ export interface Api {
   subscribeDisplay(key: string): Subscribe;
 }
 
-export function createApi(client: SupabaseClient): Api {
+export interface ApiOptions {
+  /** Give up on a call after this long, so one stalled request can't hold up every later reload. */
+  timeoutMs?: number;
+  /** import_candidates handles hundreds of rows in one transaction; it gets longer. */
+  importTimeoutMs?: number;
+}
+
+type QueryResponse = { data: unknown; error: { message?: string; code?: string } | null; status: number };
+
+export function createApi(client: SupabaseClient, { timeoutMs = 15_000, importTimeoutMs = 60_000 }: ApiOptions = {}): Api {
   function fail(error: { message?: string; code?: string }, status?: number): ApiError {
     const message = friendlyMessage(error, status);
     if (message === NOT_ALLOWED) notAllowed.emit();
     return new ApiError(message);
   }
 
-  async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
-    let response;
+  /** Runs one query with a deadline. An action that times out may still have gone through, hence the message. */
+  async function send<T>(query: (signal: AbortSignal) => PromiseLike<QueryResponse>, limitMs = timeoutMs): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), limitMs);
+    let response: QueryResponse;
     try {
-      response = await client.rpc(fn, args);
+      response = await query(controller.signal);
     } catch {
-      throw new ApiError(NETWORK_ERROR);
+      throw new ApiError(controller.signal.aborted ? TIMEOUT_ERROR : NETWORK_ERROR);
+    } finally {
+      clearTimeout(timer);
     }
+    if (controller.signal.aborted) throw new ApiError(TIMEOUT_ERROR);
     if (response.error) throw fail(response.error, response.status);
     return response.data as T;
   }
+
+  const rpc = <T,>(fn: string, args?: Record<string, unknown>, limitMs?: number) =>
+    send<T>((signal) => client.rpc(fn, args).abortSignal(signal), limitMs);
 
   return {
     boardSnapshot: () => rpc<BoardSnapshot>('board_snapshot'),
     displaySnapshot: (key) => rpc<DisplaySnapshot | null>('display_snapshot', { p_key: key }),
     serverNow: () => rpc<string>('server_now'),
-    async listCandidates(inductionId) {
-      let response;
-      try {
-        response = await client
+    listCandidates: (inductionId) =>
+      send<CandidateSummary[]>((signal) =>
+        client
           .from('candidates')
           .select('id, number, full_name, reg_number, status')
           .eq('induction_id', inductionId)
-          .order('number');
-      } catch {
-        throw new ApiError(NETWORK_ERROR);
-      }
-      if (response.error) throw fail(response.error, response.status);
-      return response.data as CandidateSummary[];
-    },
+          .order('number')
+          .abortSignal(signal),
+      ),
     getDisplayKey: () => rpc<string>('get_display_key'),
     checkIn: (candidateId) => rpc<void>('check_in', { p_candidate_id: candidateId }),
     undoCheckIn: (candidateId) => rpc<void>('undo_check_in', { p_candidate_id: candidateId }),
@@ -94,7 +108,7 @@ export function createApi(client: SupabaseClient): Api {
     reopenInterview: (interviewId) => rpc<void>('reopen_interview', { p_interview_id: interviewId }),
     addPanel: () => rpc<string>('add_panel'),
     deletePanel: (panelId) => rpc<void>('delete_panel', { p_panel_id: panelId }),
-    importCandidates: (rows) => rpc<ImportResult>('import_candidates', { p_rows: rows }),
+    importCandidates: (rows) => rpc<ImportResult>('import_candidates', { p_rows: rows }, importTimeoutMs),
     subscribeBoard: () => broadcastSubscriber(client, 'board', true),
     subscribeDisplay: (key) => broadcastSubscriber(client, `display:${key}`, false),
   };

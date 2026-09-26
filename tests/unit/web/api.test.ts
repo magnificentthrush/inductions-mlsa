@@ -1,10 +1,15 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createApi, friendlyMessage, NETWORK_ERROR, NOT_ALLOWED } from '../../../src/lib/api.ts';
+import { ApiError, createApi, friendlyMessage, NETWORK_ERROR, NOT_ALLOWED, TIMEOUT_ERROR } from '../../../src/lib/api.ts';
 import { notAllowed } from '../../../src/lib/notAllowed.ts';
 
+/** Stands in for a postgrest-js query: awaitable, with .abortSignal(). */
+function query(result: Promise<unknown>) {
+  return { abortSignal: () => result };
+}
+
 function clientReturning(response: { data?: unknown; error?: { message: string; code?: string } | null; status?: number }) {
-  const rpc = vi.fn().mockResolvedValue({ data: null, error: null, status: 200, ...response });
+  const rpc = vi.fn(() => query(Promise.resolve({ data: null, error: null, status: 200, ...response })));
   return { rpc, client: { rpc } as unknown as SupabaseClient };
 }
 
@@ -49,8 +54,18 @@ describe('createApi', () => {
   });
 
   it('turns a thrown fetch into the network message', async () => {
-    const rpc = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const rpc = vi.fn(() => query(Promise.reject(new TypeError('Failed to fetch'))));
     const api = createApi({ rpc } as unknown as SupabaseClient);
     await expect(api.serverNow()).rejects.toThrow(NETWORK_ERROR);
   });
+
+  it('gives up on a call that takes too long, instead of waiting forever', async () => {
+    // A real supabase-js client whose requests never get an answer (e.g. the venue's uplink stalls).
+    const stalled: typeof fetch = (_input, init) =>
+      new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+    const client = createClient('http://127.0.0.1:9', 'anon-key', { auth: { persistSession: false }, global: { fetch: stalled } });
+    const api = createApi(client, { timeoutMs: 50 });
+    await expect(api.boardSnapshot()).rejects.toThrow(TIMEOUT_ERROR);
+    await expect(api.listCandidates('ind-1')).rejects.toThrow(TIMEOUT_ERROR);
+  }, 3000);
 });

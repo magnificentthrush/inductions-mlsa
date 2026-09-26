@@ -16,9 +16,16 @@ export interface LiveSnapshot<T> {
 /**
  * Loads a snapshot and reloads it when the realtime channel (re)subscribes, when it delivers an
  * event, and every `pollMs` if given. Loads never overlap: events that arrive during a load cause
- * exactly one more load afterwards. `load` and `subscribe` must be stable (useCallback/useMemo).
+ * exactly one more load afterwards. A channel that hasn't joined after `connectTimeoutMs` is
+ * reported as reconnecting, so a stuck subscription never looks healthy. `load` and `subscribe`
+ * must be stable (useCallback/useMemo).
  */
-export function useLiveSnapshot<T>(load: () => Promise<T>, subscribe: Subscribe, pollMs?: number): LiveSnapshot<T> {
+export function useLiveSnapshot<T>(
+  load: () => Promise<T>,
+  subscribe: Subscribe,
+  pollMs?: number,
+  connectTimeoutMs = 15_000,
+): LiveSnapshot<T> {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<LiveStatus>('connecting');
@@ -56,6 +63,7 @@ export function useLiveSnapshot<T>(load: () => Promise<T>, subscribe: Subscribe,
   useEffect(() => {
     const state = loop.current;
     const generation = ++state.generation;
+    let joined = false;
     setStatus('connecting');
     reload();
     const stop = subscribe({
@@ -63,6 +71,7 @@ export function useLiveSnapshot<T>(load: () => Promise<T>, subscribe: Subscribe,
       onStatus: (channelStatus) => {
         if (generation !== state.generation) return;
         if (channelStatus === 'subscribed') {
+          joined = true;
           setStatus('live');
           reload(); // anything broadcast while we were (re)connecting was missed
         } else {
@@ -71,12 +80,16 @@ export function useLiveSnapshot<T>(load: () => Promise<T>, subscribe: Subscribe,
       },
     });
     const timer = pollMs ? setInterval(reload, pollMs) : undefined;
+    const stuck = setTimeout(() => {
+      if (!joined && generation === state.generation) setStatus('reconnecting');
+    }, connectTimeoutMs);
     return () => {
       state.generation++;
       stop();
       if (timer) clearInterval(timer);
+      clearTimeout(stuck);
     };
-  }, [subscribe, pollMs, reload]);
+  }, [subscribe, pollMs, connectTimeoutMs, reload]);
 
   return { data, error, status, reload };
 }

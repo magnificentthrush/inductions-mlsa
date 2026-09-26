@@ -109,4 +109,14 @@ describe('useLiveSnapshot', () => {
     unmount();
     expect(channel.stop).toHaveBeenCalledTimes(1);
   });
+
+  it('reports reconnecting when the channel never manages to join', async () => {
+    const channel = fakeChannel();
+    const load = vi.fn(async () => 1);
+    const { result } = renderHook(() => useLiveSnapshot(load, channel.subscribe, undefined, 30));
+    expect(result.current.status).toBe('connecting');
+    await waitFor(() => expect(result.current.status).toBe('reconnecting'));
+    channel.status('subscribed');
+    expect(result.current.status).toBe('live');
+  });
 });

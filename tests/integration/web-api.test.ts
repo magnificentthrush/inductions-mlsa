@@ -146,4 +146,25 @@ describe('web API layer', () => {
     await expectEvent(qm.subscribeBoard(), poke);
     await expectEvent(projector.subscribeDisplay(displayKey), poke);
   });
+
+  it('joins again when a screen re-subscribes to a topic straight after leaving it', async () => {
+    for (const [name, subscribe] of [
+      ['board', () => qm.subscribeBoard()],
+      ['projector', () => projector.subscribeDisplay(displayKey)],
+    ] as const) {
+      const first: ChannelStatus[] = [];
+      const stopFirst = subscribe()({ onEvent: () => {}, onStatus: (status) => first.push(status) });
+      await waitFor(() => first.includes('subscribed'), 15_000);
+      stopFirst(); // e.g. React remounting the screen: leave, then subscribe again at once
+      const again: ChannelStatus[] = [];
+      const stopAgain = subscribe()({ onEvent: () => {}, onStatus: (status) => again.push(status) });
+      try {
+        await waitFor(() => again.includes('subscribed'), 10_000).catch(() => {
+          throw new Error(`${name}: never joined again (statuses: ${again.join(', ') || 'none'})`);
+        });
+      } finally {
+        stopAgain();
+      }
+    }
+  });
 });
