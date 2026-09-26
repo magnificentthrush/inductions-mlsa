@@ -16,13 +16,26 @@ npm run seed:dev        # accounts admin, queue, panelist1-4 (password: inductio
 npm run functions:serve # in a second terminal: serves the admin-users edge function
 ```
 
-Supabase Studio: http://127.0.0.1:54323
+`npm run db:start` skips Studio and other services the app doesn't use, to save disk space.
+
+## Web app
+
+```bash
+npm run web:env   # writes .env.local from the running local stack
+npm run dev       # http://localhost:5173
+```
+
+Sign in as `queue` (queue manager) or `admin` with password `induction-dev`. The projector link is on the
+admin page (`/admin` → Projector link); open it on the projector machine. It needs no login. Anyone with
+the link can see the projector screen, so share it only with whoever runs the projector.
+
+`npm run build` writes the static site to `dist/`. `npm run typecheck` checks the TypeScript.
 
 ## Tests
 
 ```bash
 npm run db:test           # pgTAP: every action, RLS rule and privilege
-npm run test:unit         # Vitest unit tests
+npm run test:unit         # Vitest unit and component tests (web tests run in jsdom)
 npm run test:integration  # needs db:start + functions:serve running
 ```
 
