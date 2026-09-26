@@ -19,6 +19,14 @@ export function ComingSoon({ title }: { title: string }) {
   return <FullPageMessage title={title}>This screen arrives in the next update.</FullPageMessage>;
 }
 
+const ADMIN_LISTS: Array<[string, string]> = [
+  ['registered', 'Registered'],
+  ['waiting', 'Waiting'],
+  ['interviewing', 'Interviewing'],
+  ['interviewed', 'Interviewed'],
+  ['all', 'Everyone'],
+];
+
 export function AdminHome() {
   const api = useApi();
   const toast = useToast();
@@ -55,6 +63,17 @@ export function AdminHome() {
         </Link>
         .
       </p>
+      <section aria-labelledby="admin-candidates-title" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 id="admin-candidates-title" className="font-semibold">Candidates</h2>
+        <p className="text-sm text-slate-600">See everyone who registered, and where each person is on the day.</p>
+        <div className="flex flex-wrap gap-2">
+          {ADMIN_LISTS.map(([filter, label]) => (
+            <Link key={filter} className={buttonClasses('secondary')} to={`/queue?list=${filter}`}>
+              {label}
+            </Link>
+          ))}
+        </div>
+      </section>
       <section aria-labelledby="projector-title" className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
         <h2 id="projector-title" className="font-semibold">Projector link</h2>
         {link ? (

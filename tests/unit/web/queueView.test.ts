@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CandidateSummary } from '../../../src/lib/types.ts';
-import { canDeletePanel, describeLocation, freePanels, poolHint, searchCandidates } from '../../../src/queue/queueView.ts';
+import { canDeletePanel, describeLocation, filterCandidates, freePanels, parseListFilter, poolHint, searchCandidates } from '../../../src/queue/queueView.ts';
 import { board, boardPanel, interview, lane } from './fixtures.ts';
 
 const candidate = (number: number, full_name: string, status: CandidateSummary['status'], reg_number = `2025${number}`): CandidateSummary => ({
@@ -79,5 +79,38 @@ describe('searchCandidates', () => {
   it('returns nothing for a blank query and caps the list', () => {
     expect(searchCandidates(list, '   ')).toEqual([]);
     expect(searchCandidates(list, 'a', 2)).toHaveLength(2);
+  });
+});
+
+describe('filterCandidates', () => {
+  const list = [
+    candidate(20, 'Bilal Khan', 'waiting', '2025020'),
+    candidate(5, 'Hina Tariq', 'registered', '2025005'),
+    candidate(3, 'عائشہ خان', 'registered', '2025003'),
+    candidate(1, 'Omar Farooq', 'interviewed', '2025001'),
+  ];
+
+  it('lists everyone with a status, in number order, with no cap', () => {
+    expect(filterCandidates(list, 'registered', '').map((c) => c.number)).toEqual([3, 5]);
+    expect(filterCandidates(list, 'all', '  ').map((c) => c.number)).toEqual([1, 3, 5, 20]);
+    const many = Array.from({ length: 300 }, (_, i) => candidate(i + 1, `Person ${i + 1}`, 'registered'));
+    expect(filterCandidates(many, 'registered', '')).toHaveLength(300);
+  });
+
+  it('narrows the list by number, name or reg number', () => {
+    expect(filterCandidates(list, 'all', 'khan').map((c) => c.number)).toEqual([20]);
+    expect(filterCandidates(list, 'registered', ' 2025 003 ').map((c) => c.number)).toEqual([3]);
+    expect(filterCandidates(list, 'all', '#5').map((c) => c.number)).toEqual([5]);
+    expect(filterCandidates(list, 'waiting', 'hina')).toEqual([]);
+  });
+});
+
+describe('parseListFilter', () => {
+  it('accepts the four statuses and "all", and nothing else', () => {
+    expect(['registered', 'waiting', 'interviewing', 'interviewed', 'all'].map(parseListFilter)).toEqual([
+      'registered', 'waiting', 'interviewing', 'interviewed', 'all',
+    ]);
+    expect(parseListFilter(null)).toBeNull();
+    expect(parseListFilter('everyone')).toBeNull();
   });
 });

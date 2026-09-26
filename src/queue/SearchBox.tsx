@@ -1,36 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActionButton } from '../components/ActionButton.tsx';
-import { errorMessage } from '../lib/api.ts';
 import { useApi } from '../lib/ApiProvider.tsx';
-import type { BoardSnapshot, CandidateSummary } from '../lib/types.ts';
+import type { BoardSnapshot } from '../lib/types.ts';
 import { CandidateName } from './bits.tsx';
 import { describeLocation, searchCandidates } from './queueView.ts';
+import { useCandidates } from './useCandidates.ts';
 
 /** Find anyone by number, name or reg number; check in people who haven't arrived yet. */
 export function SearchBox({ board }: { board: BoardSnapshot }) {
   const api = useApi();
   const [query, setQuery] = useState('');
-  const [list, setList] = useState<CandidateSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const searching = query.trim() !== '';
-  const inductionId = board.induction.id;
-  const boardVersion = board.server_time; // changes with every board reload, so statuses stay fresh
-
-  useEffect(() => {
-    if (!searching) return;
-    let active = true;
-    api.listCandidates(inductionId).then(
-      (rows) => {
-        if (!active) return;
-        setList(rows);
-        setError(null);
-      },
-      (e) => active && setError(errorMessage(e)),
-    );
-    return () => {
-      active = false;
-    };
-  }, [api, inductionId, searching, boardVersion]);
+  const { list, error } = useCandidates(board, searching);
 
   const results = searching && list ? searchCandidates(list, query) : [];
 

@@ -1,5 +1,5 @@
 // Pure decisions behind the queue board, kept out of the components so they are easy to test.
-import type { BoardPanel, BoardSnapshot, CandidateSummary, Role } from '../lib/types.ts';
+import type { BoardPanel, BoardSnapshot, CandidateStatus, CandidateSummary, Role } from '../lib/types.ts';
 
 export interface PoolHint {
   candidateId: string;
@@ -46,18 +46,43 @@ export function describeLocation(board: BoardSnapshot, candidate: CandidateSumma
   }
 }
 
+/** Does a candidate match what someone typed: a number ("12" or "#12"), part of a name, or part of a reg number? */
+function matcher(query: string): ((c: CandidateSummary) => boolean) & { exactNumber: number | null } {
+  const q = query.trim();
+  const exactNumber = /^#?\d+$/.test(q) ? Number(q.replace('#', '')) : null;
+  const reg = q.replace(/\s+/g, '').toUpperCase();
+  const name = q.toLocaleLowerCase();
+  const matches = (c: CandidateSummary) =>
+    c.number === exactNumber || c.reg_number.includes(reg) || c.full_name.toLocaleLowerCase().includes(name);
+  return Object.assign(matches, { exactNumber });
+}
+
 /**
  * Finds candidates by number ("12" or "#12"), name (any case, any script) or reg number (spaces
  * and case ignored). An exact number match comes first, then everyone else by number.
  */
 export function searchCandidates(list: CandidateSummary[], query: string, limit = 20): CandidateSummary[] {
-  const q = query.trim();
-  if (!q) return [];
-  const exactNumber = /^#?\d+$/.test(q) ? Number(q.replace('#', '')) : null;
-  const reg = q.replace(/\s+/g, '').toUpperCase();
-  const name = q.toLocaleLowerCase();
+  if (!query.trim()) return [];
+  const matches = matcher(query);
   return list
-    .filter((c) => c.number === exactNumber || c.reg_number.includes(reg) || c.full_name.toLocaleLowerCase().includes(name))
-    .sort((a, b) => Number(b.number === exactNumber) - Number(a.number === exactNumber) || a.number - b.number)
+    .filter(matches)
+    .sort((a, b) => Number(b.number === matches.exactNumber) - Number(a.number === matches.exactNumber) || a.number - b.number)
     .slice(0, limit);
+}
+
+export type ListFilter = CandidateStatus | 'all';
+
+export const LIST_FILTERS: ListFilter[] = ['registered', 'waiting', 'interviewing', 'interviewed', 'all'];
+
+/** The ?list= value of /queue, if it names a list. */
+export function parseListFilter(value: string | null): ListFilter | null {
+  return LIST_FILTERS.find((filter) => filter === value) ?? null;
+}
+
+/** Everyone with a status (or everyone), in number order, narrowed by an optional query. */
+export function filterCandidates(list: CandidateSummary[], filter: ListFilter, query: string): CandidateSummary[] {
+  const matches = query.trim() ? matcher(query) : () => true;
+  return list
+    .filter((c) => (filter === 'all' || c.status === filter) && matches(c))
+    .sort((a, b) => a.number - b.number);
 }

@@ -248,6 +248,7 @@ Supabase Realtime **Broadcast**. Messages are sent from Postgres with `realtime.
 
 **`/queue`**: queue manager (and admin)
 - **Top bar:** counts (Registered · Waiting · Interviewing · Interviewed), search by number, name or reg number, **Import CSV** (opens the import summary), **+ Add panel**.
+- **Candidate lists:** clicking a count opens the full list of candidates with that status (tabs for each status and All), in number order, with where each person is, a filter box, and **Check in** on registered candidates. The list is part of the URL (`/queue?list=registered`), so it can be linked to.
 - **Panel cards (one per active panel):**
   - Status: Free (green), or Busy with number, name and live timer.
   - Panelists currently present.
@@ -281,6 +282,7 @@ Supabase Realtime **Broadcast**. Messages are sent from Postgres with `realtime.
 - **Accounts:** list; create (username, display name, role, password); reset password; disable or enable.
 - **Panels:** add, delete any.
 - **Settings:** induction name, target interview length, projector link (copy / regenerate).
+- **Candidates:** links to each candidate list on the queue board (Registered, Waiting, Interviewing, Interviewed, Everyone).
 
 **`/results`**: admin
 - **Table:** number, name, reg number, preferences, status, evaluation count, average of general scores, average per team fit, recommendation tally (e.g. "3 Yes · 1 Maybe"), and the **decision** dropdown. It is sortable and filterable by status and decision.

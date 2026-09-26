@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { useAuth } from '../auth/AuthProvider.tsx';
 import { ActionProvider } from '../components/ActionProvider.tsx';
 import { buttonClasses } from '../components/ActionButton.tsx';
@@ -6,9 +7,11 @@ import { ConnectionBanner } from '../components/ConnectionBanner.tsx';
 import { FullPageMessage } from '../components/FullPageMessage.tsx';
 import { useApi } from '../lib/ApiProvider.tsx';
 import { useLiveSnapshot } from '../lib/useLiveSnapshot.ts';
+import { CandidateListDialog } from './CandidateListDialog.tsx';
 import { ImportDialog } from './ImportDialog.tsx';
 import { PanelCard } from './PanelCard.tsx';
 import { PoolList } from './PoolList.tsx';
+import { parseListFilter, type ListFilter } from './queueView.ts';
 import { TopBar } from './TopBar.tsx';
 
 /** /queue: the queue manager's one screen (admins can open it too). */
@@ -19,6 +22,25 @@ export function QueuePage() {
   const { data: board, error, status, reload } = useLiveSnapshot(api.boardSnapshot, subscribe);
   const [importing, setImporting] = useState(false);
   const role = state.status === 'signed_in' ? state.profile.role : 'queue_manager';
+
+  // The candidate list lives in the URL (/queue?list=registered), so it can be linked to and Back closes it.
+  const [params, setParams] = useSearchParams();
+  const listFilter = parseListFilter(params.get('list'));
+  const setList = useCallback(
+    (filter: ListFilter | null, replace: boolean) =>
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (filter) next.set('list', filter);
+          else next.delete('list');
+          return next;
+        },
+        { replace },
+      ),
+    [setParams],
+  );
+  const openList = useCallback((filter: ListFilter) => setList(filter, listFilter !== null), [setList, listFilter]);
+  const closeList = useCallback(() => setList(null, true), [setList]);
 
   useEffect(() => {
     document.title = 'Queue · MLSA Induction';
@@ -42,7 +64,7 @@ export function QueuePage() {
   return (
     <ActionProvider onSettled={reload}>
       <ConnectionBanner status={status} />
-      <TopBar board={board} onImport={() => setImporting(true)} />
+      <TopBar board={board} onImport={() => setImporting(true)} onShowList={openList} />
       {error && (
         <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-800">
           Couldn't refresh the board: {error}
@@ -57,6 +79,7 @@ export function QueuePage() {
         <PoolList board={board} />
       </main>
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      {listFilter && <CandidateListDialog board={board} filter={listFilter} onFilterChange={openList} onClose={closeList} />}
     </ActionProvider>
   );
 }
