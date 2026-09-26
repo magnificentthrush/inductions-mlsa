@@ -1,4 +1,5 @@
 import type { RouteObject } from 'react-router';
+import { DisplayPage } from '../display/DisplayPage.tsx';
 import { QueuePage } from '../queue/QueuePage.tsx';
 import { LoginPage } from './LoginPage.tsx';
 import { AdminHome, ComingSoon, HomeRedirect, NotFound } from './placeholders.tsx';
@@ -7,7 +8,7 @@ import { StaffLayout } from './StaffLayout.tsx';
 
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
-  { path: '/display', element: <ComingSoon title="Projector" /> },
+  { path: '/display', element: <DisplayPage /> },
   {
     path: '/',
     element: <StaffLayout />,
